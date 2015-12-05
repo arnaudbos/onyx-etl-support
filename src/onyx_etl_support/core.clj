@@ -88,12 +88,12 @@
   [["-f" "--from <medium>" "Input storage medium"
     :missing "--from is a required parameter, it was missing or incorrect"
     :parse-fn #(keyword %)
-    :validate [#(some #{%} #{:sql}) "Must be one of #{:sql}"]]
+    :validate [#(some #{%} #{:sql}) "Must be one of #{sql}"]]
 
    ["-t" "--to <medium>" "Output storage medium"
     :missing "--to is a required parameter, it was missing or incorrect"
     :parse-fn #(keyword %)
-    :validate [#(some #{%} #{:datomic}) "Must be one of #{:datomic}"]]
+    :validate [#(some #{%} #{:datomic}) "Must be one of #{datomic}"]]
 
    [nil "--input-batch-size <n>" "Batch size of the input task"
     :parse-fn #(Integer/parseInt %)
