@@ -3,7 +3,7 @@
 (defn datomic-output-entries
   [db-uri db-partition key-map transform-batch-size output-batch-size]
   [{:onyx/name :prepare-datoms
-    :onyx/fn :onyx-etl.functions.transformers/prepare-datoms
+    :onyx/fn :onyx-etl-support.functions.transformers/prepare-datoms
     :onyx/type :function
     :datomic/partition db-partition
     :datomic/key-map key-map
