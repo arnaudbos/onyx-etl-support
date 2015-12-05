@@ -86,10 +86,9 @@
   [medium opts])
 
 (def cli-options
-  [nil "--mode <mode>" "Mode of execution. Choices are #{execute dry-run}"
-   :parse-fn #(keyword %)
-   :default :execute
-   :validate [#(some #{%} #{:execute :dry-run}) "Must be one of #{execute dry-run}"]
+  [[nil "--dry-run" "When set, prints out the Onyx job, but does not execute it."
+    :parse-fn #(boolean %)
+    :default :false]
 
    ["-f" "--from <medium>" "Input storage medium. Choices are #{sql}."
     :missing "--from is a required parameter, it was missing or incorrect"
@@ -142,11 +141,11 @@
   (str "The following errors occurred while parsing your command:\n\n"
        (clojure.string/join \newline errors)))
 
-(defn ns-form [ns-name dev-sys-ns]
+(defn ns-form [lead-ns ns-name dev-sys-ns]
  (-> (z/of-string "(ns)")
      (z/down)
      (z/rightmost)
-     (z/insert-right ns-name)
+     (z/insert-right (symbol (str lead-ns ns-name)))
      (z/rightmost)
      (z/insert-right `(:require))
      (z/append-newline)
@@ -161,7 +160,10 @@
      (z/insert-right `[onyx.plugin.datomic])
      (z/append-space 10)
      (z/append-newline)
-     (z/insert-right [dev-sys-ns :as 's])
+     (z/insert-right `[onyx-etl-support.functions.transformers])
+     (z/append-space 10)
+     (z/append-newline)
+     (z/insert-right [(symbol dev-sys-ns) :as 's])
      (z/append-space 10)
      (z/append-newline)
      (z/insert-right `[com.stuartsierra.component :as ~'component])
@@ -173,7 +175,7 @@
   (-> (z/of-string "(def)")
       (z/down)
       (z/rightmost)
-      (z/insert-right wf)
+      (z/insert-right (symbol (with-out-str (clojure.pprint/pprint wf))))
       (z/append-newline)
       (z/insert-right 'workflow)
       (z/up)
@@ -183,7 +185,7 @@
   (-> (z/of-string "(def)")
       (z/down)
       (z/rightmost)
-      (z/insert-right catalog)
+      (z/insert-right (symbol (with-out-str (clojure.pprint/pprint catalog))))
       (z/append-newline)
       (z/insert-right 'catalog)
       (z/up)
@@ -193,7 +195,7 @@
   (-> (z/of-string "(def)")
       (z/down)
       (z/rightmost)
-      (z/insert-right lifecycles)
+      (z/insert-right (symbol (with-out-str (clojure.pprint/pprint lifecycles))))
       (z/append-newline)
       (z/insert-right 'lifecycles)
       (z/up)
@@ -237,6 +239,10 @@
                       :lifecycles 'lifecycles
                       :task-scheduler :onyx.task-scheduler/balanced})
      (z/up)
+     (z/insert-right `(~'onyx.api/submit-job ~'peer-config ~'job))
+     (z/append-space 2)
+     (z/append-newline)
+     (z/rightmost)
      (z/insert-right `(~'onyx.api/await-job-completion ~'peer-config :job-id))
      (z/append-space 2)
      (z/append-newline)
@@ -249,8 +255,8 @@
      (z/up)
      (z/string)))
 
-(defn write-to-ns [target-file runner-ns dev-sys-ns job]
-  (spit target-file (ns-form runner-ns dev-sys-ns))
+(defn write-to-ns [target-file lead-ns runner-ns dev-sys-ns job]
+  (spit target-file (ns-form lead-ns runner-ns dev-sys-ns))
   (spit target-file "\n\n" :append true)
   (spit target-file (wf-form (:workflow job)) :append true)
   (spit target-file "\n\n" :append true)
@@ -283,11 +289,11 @@
                 
                 input-catalog-entries (find-input-catalog-entries from (:options opts))
                 output-catalog-entries (find-output-catalog-entries to (:options opts))
-                catalog (concat input-catalog-entries output-catalog-entries)
+                catalog (vec (concat input-catalog-entries output-catalog-entries))
 
                 input-lifecycle-entries (find-input-lifecycles from)
                 output-lifecycle-entries (find-output-lifecycles to)
-                lifecycles (concat input-lifecycle-entries output-lifecycle-entries)]
+                lifecycles (vec (concat input-lifecycle-entries output-lifecycle-entries))]
 
             (cond (not workflow)
                   {:success false
@@ -315,6 +321,6 @@
                              :lifecycles lifecycles
                              :task-scheduler :onyx.task-scheduler/balanced}
                         result {:success true :job job
-                                :mode (:mode (:options opts))
+                                :dry-run? (:dry-run (:options opts))
                                 :job-file (:job-file (:options opts))}]
                     result))))))
