@@ -138,15 +138,16 @@
   "Takes a string that represents command-line input to
    an onyx-etl program and returns a map. The key :success
    is always present. If false, building the Onyx job failed.
-   A :msg key will be present with an explanation. If :success
+   A :msgs key will be present with a sequence of strings
+   offering an explanation about the failure. If :success
    is set to true, the key :job contains the job."
   [args]
   (let [{:keys [options arguments errors summary]} (parse-opts args cli-options)]
     (cond (:help options)
-          {:success false :msg (clojure.string/split summary #"\n")}
+          {:success false :msgs (clojure.string/split summary #"\n")}
 
           errors
-          {:success false :msg (error-msg errors)}
+          {:success false :msgs [(error-msg errors)]}
 
           :else
           (let [opts (parse-opts args cli-options)
@@ -164,23 +165,23 @@
 
             (cond (not workflow)
                   {:success false
-                   :msg (format "onyx-etl doesn't support moving data from %s to %s. Aborting." from to)}
+                   :msgs [(format "onyx-etl doesn't support moving data from %s to %s. Aborting." from to)]}
 
                   (not input-catalog-entries)
                   {:success false
-                   :msg (format "onyx-etl doesn't have input catalog entries for %s. Aborting." from)}
+                   :msgs [(format "onyx-etl doesn't have input catalog entries for %s. Aborting." from)]}
 
                   (not output-catalog-entries)
                   {:success false
-                   :msg (format "onyx-etl doesn't have output catalog entries for %s. Aborting." to)}
+                   :msgs [(format "onyx-etl doesn't have output catalog entries for %s. Aborting." to)]}
 
                   (not input-lifecycle-entries)
                   {:success false
-                   :msg (format "onyx-etl doesn't have input lifecycles for %s" from)}
+                   :msgs [(format "onyx-etl doesn't have input lifecycles for %s" from)]}
 
                   (not output-catalog-entries)
                   {:success false
-                   :msg (format "onyx-etl doesn't have output lifecycles for %s" to)}
+                   :msgs [(format "onyx-etl doesn't have output lifecycles for %s" to)]}
 
                   :else
                   {:success true
