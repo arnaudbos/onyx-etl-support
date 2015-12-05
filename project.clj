@@ -8,4 +8,5 @@
                  [org.onyxplatform/onyx "0.8.2"]
                  [org.onyxplatform/onyx-datomic "0.8.2.4"]
                  [org.onyxplatform/onyx-sql "0.8.2.1"]
-                 [com.datomic/datomic-free "0.9.5327" :exclusions [joda-time]]])
+                 [com.datomic/datomic-free "0.9.5327" :exclusions [joda-time]]
+                 [rewrite-clj "0.4.12"]])

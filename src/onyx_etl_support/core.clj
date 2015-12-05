@@ -7,7 +7,8 @@
             [onyx-etl-support.catalogs.sql-catalog :as sc]
             [onyx-etl-support.workflows.sql-to-datomic :as sd]
             [onyx.plugin.datomic]
-            [onyx.plugin.sql]))
+            [onyx.plugin.sql]
+            [rewrite-clj.zip :as z]))
 
 (def default-batch-size 20)
 
@@ -110,6 +111,8 @@
     :default default-batch-size
     :validate [pos? "Must be a positive integer"]]
 
+   [nil "--write-to-ns <file name>" "Writes the Onyx job data into a Clojure file for standalone execution."]
+
    [nil "--datomic-uri <uri>" "Datomic URI"]
    [nil "--datomic-partition <part>" "Datomic partition to use"
     :parse-fn #(keyword %)]
@@ -133,6 +136,99 @@
 (defn error-msg [errors]
   (str "The following errors occurred while parsing your command:\n\n"
        (clojure.string/join \newline errors)))
+
+(defn ns-form []
+ (-> (z/of-string "(ns)")
+     (z/down)
+     (z/rightmost)
+     (z/insert-right 'my-ns)
+     (z/rightmost)
+     (z/insert-right `(:require))
+     (z/append-newline)
+     (z/rightmost)
+     (z/down)
+     (z/insert-right `[onyx.api])
+     (z/append-space 10)
+     (z/append-newline)
+     (z/insert-right `[onyx.plugin.sql])
+     (z/append-space 10)
+     (z/append-newline)
+     (z/insert-right `[onyx.plugin.datomic])
+     (z/append-space 10)
+     (z/append-newline)
+     (z/insert-right `[com.stuartsierra.component :as ~'component])
+     (z/up)
+     (z/up)
+     (z/string)))
+
+(defn wf-form [wf]
+  (-> (z/of-string "(def)")
+      (z/down)
+      (z/rightmost)
+      (z/insert-right wf)
+      (z/append-newline)
+      (z/insert-right 'workflow)
+      (z/up)
+      (z/string)))
+
+(defn catalog-form [catalog]
+  (-> (z/of-string "(def)")
+      (z/down)
+      (z/rightmost)
+      (z/insert-right catalog)
+      (z/append-newline)
+      (z/insert-right 'catalog)
+      (z/up)
+      (z/string)))
+
+(defn lifecycles-form [lifecycles]
+  (-> (z/of-string "(def)")
+      (z/down)
+      (z/rightmost)
+      (z/insert-right lifecycles)
+      (z/append-newline)
+      (z/insert-right 'lifecycles)
+      (z/up)
+      (z/string)))
+
+#_(println
+ (-> (z/of-string "(defn)")
+     (z/down)
+     (z/rightmost)
+     (z/insert-right '-main)
+     (z/rightmost)
+     (z/insert-right `[& ~'args])
+     (z/rightmost)
+     (z/insert-right `(~'let [~'n-peers 4
+                              ~'dev-env (component/start (s/onyx-dev-env ~'n-peers))]))
+     (z/append-newline)
+     (z/up)
+     (z/string)))
+
+  `(~'defn ~'-main [& ~'args]
+     (~'let [~'n-peers 4
+             ~'dev-env (component/start (s/onyx-dev-env ~'n-peers))
+             ~'peer-config (s/load-peer-config (:onyx-id ~'dev-env))
+             ~'job {:workflow ~'workflow
+                    :catalog ~'catalog
+                    :lifecycles ~'lifecycles
+                    :task-scheduler :onyx.task-scheduler/balanced}
+             ~'job-id (:job-id (onyx.api/submit-job ~'peer-config ~'job))]
+       (onyx.api/await-job-completion ~'peer-config ~'job-id)
+       (component/stop ~'dev-env)))
+
+(defn write-to-ns [target-file job]
+  (spit target-file (ns-form))
+  (spit target-file "\n\n" :append true)
+  (spit target-file (wf-form (:workflow job)) :append true)
+  (spit target-file "\n\n" :append true)
+  (spit target-file (catalog-form (:catalog job)) :append true)
+  (spit target-file "\n\n" :append true)
+  (spit target-file (lifecycles-form (:lifecycles job)) :append true)
+  (spit target-file "\n\n" :append true)
+  (spit target-file (with-out-str (clojure.pprint/pprint (main-form))) :append true))
+
+#_ (write-to-ns "target.clj" {:workflow [[:a :b]] :catalog :b :lifecycles :c :task-scheduler :d})
 
 (defn parse-cli-opts
   "Takes a string that represents command-line input to
@@ -184,9 +280,11 @@
                    :msgs [(format "onyx-etl doesn't have output lifecycles for %s" to)]}
 
                   :else
-                  {:success true
-                   :job
-                   {:workflow workflow
-                    :catalog catalog
-                    :lifecycles lifecycles
-                    :task-scheduler :onyx.task-scheduler/balanced}})))))
+                  (let [job {:workflow workflow
+                             :catalog catalog
+                             :lifecycles lifecycles
+                             :task-scheduler :onyx.task-scheduler/balanced}
+                        result {:success true :job job}]
+                    (when (:write-to-ns (:options opts))
+                      (write-to-ns (:write-to-ns (:options opts)) job))
+                    result))))))
