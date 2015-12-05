@@ -86,12 +86,17 @@
   [medium opts])
 
 (def cli-options
-  [["-f" "--from <medium>" "Input storage medium"
+  [nil "--mode <mode>" "Mode of execution. Choices are #{execute dry-run}"
+   :parse-fn #(keyword %)
+   :default :execute
+   :validate [#(some #{%} #{:execute :dry-run}) "Must be one of #{execute dry-run}"]
+
+   ["-f" "--from <medium>" "Input storage medium. Choices are #{sql}."
     :missing "--from is a required parameter, it was missing or incorrect"
     :parse-fn #(keyword %)
     :validate [#(some #{%} #{:sql}) "Must be one of #{sql}"]]
 
-   ["-t" "--to <medium>" "Output storage medium"
+   ["-t" "--to <medium>" "Output storage medium. Choices are #{datomic}."
     :missing "--to is a required parameter, it was missing or incorrect"
     :parse-fn #(keyword %)
     :validate [#(some #{%} #{:datomic}) "Must be one of #{datomic}"]]
@@ -111,7 +116,7 @@
     :default default-batch-size
     :validate [pos? "Must be a positive integer"]]
 
-   [nil "--write-to-ns <file name>" "Writes the Onyx job data into a Clojure file for standalone execution."]
+   [nil "--job-file <file name>" "Writes the Onyx job data into a Clojure file for standalone execution."]
 
    [nil "--datomic-uri <uri>" "Datomic URI"]
    [nil "--datomic-partition <part>" "Datomic partition to use"
@@ -137,11 +142,11 @@
   (str "The following errors occurred while parsing your command:\n\n"
        (clojure.string/join \newline errors)))
 
-(defn ns-form []
+(defn ns-form [ns-name dev-sys-ns]
  (-> (z/of-string "(ns)")
      (z/down)
      (z/rightmost)
-     (z/insert-right 'my-ns)
+     (z/insert-right ns-name)
      (z/rightmost)
      (z/insert-right `(:require))
      (z/append-newline)
@@ -154,6 +159,9 @@
      (z/append-space 10)
      (z/append-newline)
      (z/insert-right `[onyx.plugin.datomic])
+     (z/append-space 10)
+     (z/append-newline)
+     (z/insert-right [dev-sys-ns :as 's])
      (z/append-space 10)
      (z/append-newline)
      (z/insert-right `[com.stuartsierra.component :as ~'component])
@@ -241,8 +249,8 @@
      (z/up)
      (z/string)))
 
-(defn write-to-ns [target-file job]
-  (spit target-file (ns-form))
+(defn write-to-ns [target-file runner-ns dev-sys-ns job]
+  (spit target-file (ns-form runner-ns dev-sys-ns))
   (spit target-file "\n\n" :append true)
   (spit target-file (wf-form (:workflow job)) :append true)
   (spit target-file "\n\n" :append true)
@@ -306,7 +314,7 @@
                              :catalog catalog
                              :lifecycles lifecycles
                              :task-scheduler :onyx.task-scheduler/balanced}
-                        result {:success true :job job}]
-                    (when (:write-to-ns (:options opts))
-                      (write-to-ns (:write-to-ns (:options opts)) job))
+                        result {:success true :job job
+                                :mode (:mode (:options opts))
+                                :job-file (:job-file (:options opts))}]
                     result))))))
