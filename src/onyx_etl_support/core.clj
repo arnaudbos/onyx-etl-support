@@ -191,7 +191,7 @@
       (z/up)
       (z/string)))
 
-#_(println
+(defn main-form []
  (-> (z/of-string "(defn)")
      (z/down)
      (z/rightmost)
@@ -199,23 +199,47 @@
      (z/rightmost)
      (z/insert-right `[& ~'args])
      (z/rightmost)
-     (z/insert-right `(~'let [~'n-peers 4
-                              ~'dev-env (component/start (s/onyx-dev-env ~'n-peers))]))
+     (z/insert-right `(~'let))
      (z/append-newline)
+     (z/rightmost)
+     (z/down)
+     (z/insert-right `[~'n-peers])
+     (z/rightmost)
+     (z/down)
+     (z/insert-right 4)
+     (z/rightmost)
+     (z/insert-right 'dev-env)
+     (z/append-space 6)
+     (z/append-newline)
+     (z/rightmost)
+     (z/insert-right `(component/start (s/onyx-dev-env ~'n-peers)))
+     (z/rightmost)
+     (z/insert-right 'peer-config)
+     (z/append-space 6)
+     (z/append-newline)
+     (z/rightmost)
+     (z/insert-right `(s/load-peer-config (:onyx-id ~'dev-env)))
+     (z/rightmost)
+     (z/insert-right 'job)
+     (z/append-space 6)
+     (z/append-newline)
+     (z/rightmost)
+     (z/insert-right {:workflow 'workflow
+                      :catalog 'catalog
+                      :lifecycles 'lifecycles
+                      :task-scheduler :onyx.task-scheduler/balanced})
+     (z/up)
+     (z/insert-right `(~'onyx.api/await-job-completion ~'peer-config :job-id))
+     (z/append-space 2)
+     (z/append-newline)
+     (z/rightmost)
+     (z/insert-right `(~'component/stop ~'dev-env))
+     (z/append-space 2)
+     (z/append-newline)
+     (z/rightmost)
+     (z/up)
      (z/up)
      (z/string)))
-
-  `(~'defn ~'-main [& ~'args]
-     (~'let [~'n-peers 4
-             ~'dev-env (component/start (s/onyx-dev-env ~'n-peers))
-             ~'peer-config (s/load-peer-config (:onyx-id ~'dev-env))
-             ~'job {:workflow ~'workflow
-                    :catalog ~'catalog
-                    :lifecycles ~'lifecycles
-                    :task-scheduler :onyx.task-scheduler/balanced}
-             ~'job-id (:job-id (onyx.api/submit-job ~'peer-config ~'job))]
-       (onyx.api/await-job-completion ~'peer-config ~'job-id)
-       (component/stop ~'dev-env)))
 
 (defn write-to-ns [target-file job]
   (spit target-file (ns-form))
@@ -226,9 +250,7 @@
   (spit target-file "\n\n" :append true)
   (spit target-file (lifecycles-form (:lifecycles job)) :append true)
   (spit target-file "\n\n" :append true)
-  (spit target-file (with-out-str (clojure.pprint/pprint (main-form))) :append true))
-
-#_ (write-to-ns "target.clj" {:workflow [[:a :b]] :catalog :b :lifecycles :c :task-scheduler :d})
+  (spit target-file (main-form) :append true))
 
 (defn parse-cli-opts
   "Takes a string that represents command-line input to
