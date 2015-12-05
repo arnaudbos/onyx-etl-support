@@ -141,7 +141,7 @@
    A :msg key will be present with an explanation. If :success
    is set to true, the key :job contains the job."
   [args]
-  (let [{:keys [options arguments errors summary]} (parse-opts [args] cli-options)]
+  (let [{:keys [options arguments errors summary]} (parse-opts args cli-options)]
     (cond (:help options)
           {:success false :msg (clojure.string/split summary #"\n")}
 
