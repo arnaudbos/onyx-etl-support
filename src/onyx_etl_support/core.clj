@@ -2,7 +2,6 @@
   (:require [clojure.tools.cli :refer [parse-opts]]
             [onyx-etl-support.lifecycles.datomic-lifecycles :as dl]
             [onyx-etl-support.lifecycles.sql-lifecycles :as sl]
-            [onyx-etl-support.functions.transformers :as t]
             [onyx-etl-support.catalogs.datomic-catalog :as dc]
             [onyx-etl-support.catalogs.sql-catalog :as sc]
             [onyx-etl-support.workflows.sql-to-datomic :as sd]
@@ -160,7 +159,7 @@
      (z/insert-right `[onyx.plugin.datomic])
      (z/append-space 10)
      (z/append-newline)
-     (z/insert-right `[onyx-etl-support.functions.transformers])
+     (z/insert-right `[datomic.api :as ~'d])
      (z/append-space 10)
      (z/append-newline)
      (z/insert-right [(symbol dev-sys-ns) :as 's])
@@ -170,6 +169,19 @@
      (z/up)
      (z/up)
      (z/string)))
+
+(defn code-gen-guide []
+  ";; This is an automatically generated Onyx job file. You can run me with
+;; with a `lein run -m` command. You can use this generated file to write
+;; more expressive Onyx jobs. If you find you need more power, try running
+;; lein new onyx-app my-app. The Onyx application template comes preloaded
+;; with significantly more features out fo the box.")
+
+(defn function-form []
+  "(defn prepare-datoms [db-partition ks segment]
+    (let [base {:db/id (d/tempid db-partition)}
+          new-keys (reduce-kv #(assoc %1 %2 (get segment %3)) {} ks)]
+      {:tx [(merge base new-keys)]}))")
 
 (defn wf-form [wf]
   (-> (z/of-string "(def)")
@@ -258,20 +270,42 @@
      (z/append-space 2)
      (z/append-newline)
      (z/rightmost)
+     (z/insert-right `(~'println "Data transfer complete. Check onyx.log for any errors or exceptions."))
+     (z/append-space 2)
+     (z/append-newline)
+     (z/rightmost)
      (z/up)
      (z/up)
      (z/string)))
 
+(defn alter-fn-namespaces [catalog task-name function-ns]
+  (mapv
+   (fn [task-map]
+     (if (= (:onyx/name task-map) task-name)
+       (assoc task-map :onyx/fn function-ns)
+       task-map))
+   catalog))
+
+(defn rewrite-job-paths [job lead-ns ns-name]
+  (assoc job :catalog
+         (alter-fn-namespaces (:catalog job) :prepare-datoms
+                              (keyword (str lead-ns ns-name "/prepare-datoms")))))
+
 (defn write-to-ns [target-file lead-ns runner-ns dev-sys-ns job]
-  (spit target-file (ns-form lead-ns runner-ns dev-sys-ns))
-  (spit target-file "\n\n" :append true)
-  (spit target-file (wf-form (:workflow job)) :append true)
-  (spit target-file "\n\n" :append true)
-  (spit target-file (catalog-form (:catalog job)) :append true)
-  (spit target-file "\n\n" :append true)
-  (spit target-file (lifecycles-form (:lifecycles job)) :append true)
-  (spit target-file "\n\n" :append true)
-  (spit target-file (main-form) :append true))
+  (let [job-rewrite (rewrite-job-paths job lead-ns runner-ns)]
+    (spit target-file (ns-form lead-ns runner-ns dev-sys-ns))
+    (spit target-file "\n\n" :append true)
+    (spit target-file (code-gen-guide) :append true)
+    (spit target-file "\n\n" :append true)
+    (spit target-file (function-form) :append true)
+    (spit target-file "\n\n" :append true)
+    (spit target-file (wf-form (:workflow job-rewrite)) :append true)
+    (spit target-file "\n\n" :append true)
+    (spit target-file (catalog-form (:catalog job-rewrite)) :append true)
+    (spit target-file "\n\n" :append true)
+    (spit target-file (lifecycles-form (:lifecycles job-rewrite)) :append true)
+    (spit target-file "\n\n" :append true)
+    (spit target-file (main-form) :append true)))
 
 (defn parse-cli-opts
   "Takes a string that represents command-line input to
