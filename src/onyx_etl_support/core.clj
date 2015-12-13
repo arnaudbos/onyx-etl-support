@@ -87,7 +87,7 @@
 (def cli-options
   [[nil "--dry-run" "When set, prints out the Onyx job, but does not execute it."
     :parse-fn #(boolean %)
-    :default :false]
+    :default false]
 
    ["-f" "--from <medium>" "Input storage medium. Choices are #{sql}."
     :missing "--from is a required parameter, it was missing or incorrect"
