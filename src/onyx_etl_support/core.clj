@@ -315,7 +315,7 @@
    offering an explanation about the failure. If :success
    is set to true, the key :job contains the job."
   [args]
-  (let [{:keys [options arguments errors summary]} (parse-opts args cli-options)]
+  (let [{:keys [options arguments errors summary] :as opts} (parse-opts args cli-options)]
     (cond (:help options)
           {:success false :msgs (clojure.string/split summary #"\n")}
 
@@ -323,8 +323,7 @@
           {:success false :msgs [(error-msg errors)]}
 
           :else
-          (let [opts (parse-opts args cli-options)
-                from (:from (:options opts))
+          (let [from (:from (:options opts))
                 to (:to (:options opts))
                 workflow (build-workflow from to)
                 
@@ -352,7 +351,7 @@
                   {:success false
                    :msgs [(format "onyx-etl doesn't have input lifecycles for %s" from)]}
 
-                  (not output-catalog-entries)
+                  (not output-lifecycle-entries)
                   {:success false
                    :msgs [(format "onyx-etl doesn't have output lifecycles for %s" to)]}
 
